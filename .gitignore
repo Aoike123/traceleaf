@@ -1,0 +1,32 @@
+# Dependencies and build output
+node_modules/
+dist/
+out/
+release/
+coverage/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+.aws/
+.codex/
+.agents/
+
+# Local runtime state and generated artifacts
+.traceleaf/
+.traceleaf-data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.log
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
