@@ -1,6 +1,6 @@
 # Traceleaf 体系架构基线
 
-- 基线日期：2026-10-16
+- 基线日期：2026-10-17
 - 状态：桌面优先的开发设计基线，尚未实现
 - 适用范围：递归任务运行时地基，以及未来 Workflow 提取所需的数据与执行契约
 
@@ -449,7 +449,7 @@ WorkflowSpec
 
 当前选型为 Electron + React、TypeScript Core、SQLite 与本地 ArtifactStore。详细库、驱动待决项、桌面进程边界及可选云端方案统一维护在 [技术选型](tech-stack.md)，本文不重复维护依赖清单。
 
-先通过 CLI 跑通单 Task，再加入串行父子任务、可靠恢复、Electron 界面、真实 MCP 场景和第一条 Workflow。重计算由实际工具执行，TS Workflow 执行器负责参数绑定、调用、验证与恢复。World Engine / RAG 和 Storyloom 集成后置。
+按模块顺序构筑：ModelGateway → 能力注册与装配 → 单 Task Loop → 任务调度 → 持久化恢复 → 结果验证 → 预算 → 拆解与进展 → 上下文与产物 → 执行环境 → 可观测评测 → 用户控制。其后再做 Electron、真实业务基准、Workflow、World Engine / RAG 与 Storyloom 集成。CLI 按模块提供验证入口，不将完整 Task 系统作为网关前提。重计算由实际工具执行，TS Workflow 执行器负责参数绑定、调用、验证与恢复。World Engine / RAG 和 Storyloom 集成后置。
 
 首个完整里程碑与实施验收见 [地基实施清单](foundation-plan.md)。
 

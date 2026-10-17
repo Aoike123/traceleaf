@@ -1,13 +1,13 @@
 # Traceleaf CLI 模块计划
 
-- 更新日期：2026-10-16
+- 更新日期：2026-10-17
 - 状态：设计草案，命令示例尚不可执行
 - 范围：通过 CLI 逐步交付核心能力，后续桌面复用同一核心
 - 全局阶段以 [项目计划书](project-plan.md) 为准；运行语义见 [体系架构](architecture.md)
 
 ## 1. 定位与边界
 
-CLI 是 Traceleaf 核心的第一个使用入口，也是后续排查、脚本集成与回归演示的入口。它负责解析用户意图、调用核心服务、呈现结果，不另写一套 Agent Loop 或上下文系统。
+CLI 随核心模块逐步提供验证入口，先验证独立网关，再接能力装配和 Task Loop。CLI 是 Traceleaf 核心的第一个使用入口，也是后续排查、脚本集成与回归演示的入口。它负责解析用户意图、调用核心服务、呈现结果，不另写一套 Agent Loop 或上下文系统。
 
 ```text
 命令参数 / 输入文件 / 前台交互
@@ -29,17 +29,19 @@ SQLite + ArtifactStore + 模型与工具
 
 | 模块 | CLI 职责 | 依赖核心 | 首次交付阶段 |
 | --- | --- | --- | --- |
-| A. 命令入口与配置 | 参数、帮助、工作目录、配置解析、错误展示 | 配置与启动服务 | 阶段 1 |
-| B. 任务提交与运行 | 提交目标、输入、验收条件，前台驱动任务 | TaskService、TaskRunner | 阶段 1 |
-| C. 状态与事件 | 查询状态、观察当前步骤、展示停止原因 | 查询服务、执行事件 | 阶段 1，阶段 2 增加树视图 |
-| D. 能力装配入口 | 查看目录，选择固定 Skill/Tools 配置 | Registry、SkillResolver、CapabilityBinder | 阶段 1，阶段 2 支持子任务绑定 |
-| E. 结果与产物 | 查看结论、验证、文件位置与证据 | TaskResult、Verifier、ArtifactStore | 阶段 1 |
-| F. 递归任务展示 | 树、当前活跃链、父子交接与返回 | Scheduler、ResultCollector | 阶段 2 |
-| G. 运行控制与恢复 | 暂停、继续、取消、补充信息、重启恢复 | 执行权、检查点、控制指令 | 阶段 3 |
-| H. 上下文诊断 | 查看输入来源、能力版本、检查点与截断信息 | ContextSnapshot、ContextBuilder | 阶段 1 记录，阶段 3 完整查询 |
-| I. 用量与轨迹导出 | 汇总消耗、导出任务树和依赖、辅助诊断 | 用量账本、事件与产物来源 | 阶段 1 基础，阶段 3 完整 |
-| J. MCP 与评审配置 | 诊断连接、选择适配器、展示能力可用性 | MCP Adapter、ModelGateway、Verifier | 阶段 5 |
-| K. Workflow 入口 | 检查定义、执行流程、查看结果 | Workflow IR 与执行器 | 阶段 6 |
+| A. 入口与配置 | 参数、帮助、路径、凭证引用、输出 | 最小配置与启动服务 | 1 |
+| B. 网关验证 | 两种调用模式、调用记录、用量与错误 | ModelGateway | 1 |
+| C. 能力装配 | 查看和验证 Skill/Tools/MCP 配置 | Registry、Resolver、Binder、Executor | 2 |
+| D. 单任务运行 | 提交目标、前台 Loop、基本状态与结果 | TaskService、TaskRunner | 3 |
+| E. 任务树 | 展示唯一活跃链、父子交接与结果 | Scheduler、ResultCollector | 4 |
+| F. 恢复诊断 | 显示检查点、未知操作与恢复结果 | Persistence、Recovery | 5 |
+| G. 结果验收 | 展示交付、证据与评审报告 | Verifier | 3 基础，6 完整 |
+| H. 用量汇总 | 请求用量、树级账本、预留与未知项 | Gateway、Budget | 1 基础，7 树级 |
+| I. 拆解进展 | 展示拆解理由、输入交付及进展变化 | Decomposer | 8 |
+| J. 上下文与产物 | 快照来源、版本、压缩和文件查询 | ContextBuilder、ArtifactStore | 3 基础，9 完整 |
+| K. 诊断与导出 | 环境范围、调用轨迹、依赖和基准 | Environment、Observability | 1 基础，10–11 完整 |
+| L. 用户控制 | 暂停、恢复、取消、补充信息 | ControlService | 5 内部机制，12 稳定入口 |
+| M. Workflow | 定义校验、执行与结果查询 | Workflow IR 与执行器 | 15 |
 
 模块按阶段增量交付，不把所有命令作为启动开发的前置条件。模型 SDK、MCP SDK、CLI 解析库与 SQLite 驱动的具体版本统一在实施时核验锁定。
 
@@ -49,27 +51,30 @@ SQLite + ArtifactStore + 模型与工具
 
 | 命令 | 行为 | 阶段 |
 | --- | --- | --- |
-| `traceleaf run --spec task.json` | 校验任务描述，创建并前台运行根任务 | 1 |
-| `traceleaf task list` | 列出当前工作目录的任务及状态 | 1 |
-| `traceleaf task show <task-id>` | 查询目标、进度、状态、停止原因和交付索引 | 1 |
-| `traceleaf task events <task-id>` | 查看持久事件；活跃运行时可订阅增量事件 | 1 |
-| `traceleaf task result <task-id>` | 查询最终或部分结果、验证结论与未解决项 | 1 |
-| `traceleaf artifact show <artifact-id>` | 查看元数据和受限文本预览，显示文件位置 | 1 |
-| `traceleaf capability list` | 列出当前配置中可发现的 Skill 与 Tools | 1 |
-| `traceleaf capability show <capability-id>` | 查看用途、参数、版本及要求 | 1 |
-| `traceleaf task tree <root-id>` | 展示父子关系、状态及唯一活跃节点 | 2 |
-| `traceleaf task pause <root-id>` | 请求整根任务停止安排后续动作并保存进度 | 3 |
-| `traceleaf task resume <root-id>` | 核对操作和等待条件后，在前台继续运行 | 3 |
-| `traceleaf task cancel <root-id>` | 请求取消后续工作，保留既有产物和副作用记录 | 3 |
-| `traceleaf task input <task-id> --file reply.txt` | 向指定节点提交补充信息；由核心判断是否可继续 | 3 |
-| `traceleaf context show <snapshot-id>` | 展示脱敏的输入结构、来源、版本与压缩记录 | 3 |
-| `traceleaf task usage <root-id>` | 查询累计消耗、预留和待确认项 | 3 |
-| `traceleaf task export <root-id> --out trace.json` | 导出任务、操作、依赖、证据和用量索引 | 3 |
-| `traceleaf doctor` | 按需检查配置、存储与能力连接，输出明确诊断 | 1 基础，5 增加真实连接 |
-| `traceleaf workflow validate --file workflow.json` | 检查版本、绑定、依赖和能力要求 | 6 |
-| `traceleaf workflow run --file workflow.json --input input.json` | 脱离原探索历史运行 Workflow | 6 |
+| `traceleaf gateway request --file request.json` | 单次网关逻辑请求，选择结构化输出或工具调用模式 | 1 |
+| `traceleaf gateway show <request-id>` | 查看归一结果、尝试、用量与错误 | 1 |
+| `traceleaf doctor` | 检查当前模块的配置和可用性，逐阶段扩充 | 1 起 |
+| `traceleaf capability list` | 查看可发现的 Skill 与 Tools | 2 |
+| `traceleaf capability show <capability-id>` | 查看描述、Schema、版本与要求 | 2 |
+| `traceleaf capability check --file capabilities.json` | 检查装配与连接，真实探测需明确开启 | 2 |
+| `traceleaf run --spec task.json` | 创建并前台运行单 Task | 3 |
+| `traceleaf task list` | 列出任务状态 | 3 |
+| `traceleaf task show <task-id>` | 查看进度、状态、停止原因 | 3 |
+| `traceleaf task events <task-id>` | 查看执行事件，后续补充稳定订阅与续读 | 3 基础，11 完整 |
+| `traceleaf task result <task-id>` | 查看结果和证据 | 3 基础，6 完整 |
+| `traceleaf artifact show <artifact-id>` | 查看元数据、位置与受限预览 | 3 基础，9 完整 |
+| `traceleaf task tree <root-id>` | 查看任务树与活跃节点 | 4 |
+| `traceleaf task resume <root-id>` | 核对状态后前台继续；用户控制阶段稳定接口 | 5 基础，12 完整 |
+| `traceleaf task usage <root-id>` | 查看累计消耗、预留与未知项 | 7 |
+| `traceleaf context show <snapshot-id>` | 查看脱敏上下文结构与来源 | 9 |
+| `traceleaf task export <root-id> --out trace.json` | 导出任务、操作、依赖、证据与用量 | 11 |
+| `traceleaf task pause <root-id>` | 请求安全暂停 | 12 |
+| `traceleaf task cancel <root-id>` | 请求取消，保留既有成果 | 12 |
+| `traceleaf task input <task-id> --file reply.txt` | 持久提交补充信息 | 12 |
+| `traceleaf workflow validate --file workflow.json` | 校验流程与能力绑定 | 15 |
+| `traceleaf workflow run --file workflow.json --input input.json` | 脱离原聊天运行 Workflow | 15 |
 
-`task.json` 包含目标、输入引用、完成条件、能力配置引用和单 Loop 限制；最终字段由阶段 1 的最小契约确定。凭证不写入任务文件。Workflow 提取先人工辅助完成，自动提取命令另行规划。
+阶段 1 的 request.json 仅包含网关输入、模式、模型配置与调用限制，不要求 TaskSpec 或任务数据库；网关返回工具提议，不执行工具。任务文件在阶段 3 定义，包含目标、输入、验收、能力引用与 Loop 限制。所有示例命令均未实现，字段和选项在所属模块实施时固定。凭证不放入输入文件。
 
 ## 4. 配置、路径与凭证
 
@@ -83,15 +88,19 @@ SQLite + ArtifactStore + 模型与工具
 
 ## 5. 进程所有权与运行控制
 
-### 阶段 1–2
+### 阶段 1–2：独立模块验证
+
+网关请求和能力检查以当前命令为生命周期，不启动 TaskRunner。网关排队、网络尝试、取消与费用未知由网关本身处理，不复用尚未存在的任务控制状态。
+
+### 阶段 3–4：前台 Task
 
 `run` 在前台承载核心运行时。首版同一工作目录只允许一个写入运行时，终端持续显示执行事件。另一个运行命令遇到已存在的执行者时返回明确错误，不自行接管。
 
-查询通过核心查询模块访问只读视图或短查询，不自行修改任务状态。未完成任务若因进程退出遗留，阶段 3 前只报告状态与限制，不声称具备可靠恢复能力。
+查询通过核心查询模块访问只读视图或短查询，不自行修改任务状态。未完成任务若因进程退出遗留，阶段 5 前只报告状态与限制，不声称具备可靠恢复能力。
 
-### 阶段 3 起
+### 阶段 5 建立恢复，阶段 12 稳定控制
 
-短生命周期的控制命令通过本地受控通信通道，把请求交给已有运行时所有者；它们不启动第二个执行器。传输的具体实现留到阶段入口确定，核心服务接口保持一致，后续 Electron 可复用。
+阶段 12 的短生命周期控制命令通过本地受控通信通道，把请求交给已有运行时所有者；它们不启动第二个执行器。传输的具体实现留到阶段入口确定，核心服务接口保持一致，后续 Electron 可复用。
 
 没有活跃所有者时，`resume` 在核对执行权与未确认操作后启动前台核心。`pause`、`cancel`、`input` 对离线任务的处理也必须先安全取得所有权，再调用核心，不直接改数据库行。
 
@@ -103,11 +112,12 @@ SQLite + ArtifactStore + 模型与工具
 
 默认显示根任务 ID、当前活跃节点、步骤摘要、工具执行状态、等待原因、交付位置和已知用量。长内容保存到产物，不把全部模型请求和工具正文刷入终端。
 
-前台默认显示事件并等待任务完成或停住；后台守护模式后置。阶段 3 起，第一次 Ctrl+C 请求安全暂停；再次中断允许强制退出，但下次启动必须核对未确认操作，不能假装已安全暂停。
+前台默认显示事件并等待任务完成或停住；后台守护模式后置。独立网关阶段 Ctrl+C 请求取消本次调用，但不保证供应商停止或免费。Task 的安全停止在阶段 5 建立，用户控制在阶段 12 稳定；此后第一次 Ctrl+C 请求安全暂停；再次中断允许强制退出，但下次启动必须核对未确认操作，不能假装已安全暂停。
 
 ### 机器可读输出
 
 - 查询和控制命令的 `--json` 向 stdout 输出一个稳定结果对象。
+- `gateway request --json` 返回单次逻辑请求结果及实际尝试/用量，不混入工具执行结果。
 - `run --json` 的 stdout 只输出结束时的结果对象，执行过程诊断写入 stderr。
 - 事件命令可提供 `--jsonl`，每行一条带事件 ID 和序号的记录，支持游标续读。
 - stdout 不混入颜色、动画、日志或提示语；stderr 同样脱敏。
@@ -134,27 +144,32 @@ CLI 可以指定任务输入、能力配置和补充要求，但不直接拼接�
 
 `capability list` 表示能发现哪些能力，不代表当前 Task 已获得权限。创建任务时的能力选择需要 CapabilityBinder 验证；不提供绕过授权、直接把任意工具挂到活跃任务上的快捷命令。
 
-阶段 1 的单 Task 采用固定能力配置；阶段 2 子任务按委派契约装配。运行时动态申请能力仍然属于后续扩展。
+阶段 2 独立验证固定能力配置；阶段 3 单 Task 使用该配置，阶段 4 子任务按委派契约装配。运行时动态申请能力仍然属于后续扩展。
 
 ## 8. 分阶段验收与测试
 
 | 阶段 | CLI 交付 | 必须通过 |
 | --- | --- | --- |
-| 1 | run、基本查询、能力查看、产物与本地诊断 | 从终端完成单任务；JSON 可解析；错误有退出码；凭证脱敏；已有写入所有者时不启动第二个运行时 |
-| 2 | tree、交接事件、子任务结果 | A 完成返回父任务后才进入 B；树显示状态准确；上下文不自动串入父节点 |
-| 3 | 控制、恢复、上下文诊断、用量与导出 | 安全暂停、进程退出再恢复、过期提交、未知写操作、事件续读、非交互输入等待 |
-| 4 | CLI/桌面共用核心与目录 | 两个入口定位同一任务；所有权冲突明确；不重复启动执行器；CLI 不依赖 GUI 进程 |
-| 5 | MCP/评审配置及真实连接诊断 | 连接失败可定位；版本冲突可见；探测不修改工程；隐藏凭证 |
-| 6 | Workflow 校验与运行 | 新输入、能力版本、失败路径可验证；不读取原始探索聊天作为隐含输入 |
+| 1 | 网关请求、调用查询、基础配置与诊断 | 两种模式、假提供商故障、真实调用、用量、取消与脱敏；不要求完整 Task |
+| 2 | 能力查看、装配检查与 MCP 探测 | 参数与权限校验、版本绑定、受控执行 |
+| 3 | run、状态、事件、基本结果与产物 | 单任务自主工具循环、有限自愈、明确停止 |
+| 4 | tree、交接与子任务结果 | 同根唯一活跃，父子显式交接 |
+| 5 | 前台恢复与故障诊断 | 未知操作核对、过期提交保护、进程退出后恢复 |
+| 6–7 | 验收报告与树级用量 | 证据不足不成功，费用不重复结算 |
+| 8–9 | 拆解进展与上下文诊断 | 区分进展与同义递归，快照有来源 |
+| 10–11 | 环境诊断、事件续读与轨迹导出 | 资源边界明确、事件不漏读、依赖可追踪 |
+| 12 | 完整控制和非交互协议 | 暂停/恢复/取消/输入有明确接收与完成语义 |
+| 13–14 | 桌面共用服务与真实工程诊断 | 不重复启动核心，真实版本冲突与恢复可解释 |
+| 15 | Workflow 校验与运行 | 新输入、失败路径与版本依赖验证 |
+| 16–17 | 按领域与业务需求扩展 | 不作为 CLI 基础或网关验收前提 |
 
 采用 Vitest 进行必要的参数解析、输出协议测试；关键 CLI 场景通过真实子进程、临时 SQLite 和可控工具验证。重点检查进程生命周期、状态和副作用，不以逐行匹配所有终端文案作为正确性标准。
 
 ## 9. 当前实施顺序
 
-1. 定义单 Task 示例、最小 TaskSpec 与核心服务接口。
-2. 建立命令入口、配置与工作目录解析。
-3. 接入 `run`、基本查询、能力展示和产物读取。
-4. 用假模型验证输出和失败分支，再接真实模型完成演示。
-5. 按全局阶段增加任务树、运行控制、上下文与导出。
+1. 先确定独立 ModelGateway 的请求、响应、尝试和用量契约。
+2. 提供最薄的 `gateway request`、`gateway show` 与配置入口，验证两种模式和故障分支。
+3. 网关验收后再进入能力装配，随后接单 Task Loop 和任务树。
+4. 后续 CLI 随核心阶段增量交付，不倒逼提前开发整个任务系统。
 
-首版不实现全屏 TUI、后台守护服务、远程多用户控制或完整自动 Workflow 提取。CLI 使用的服务接口与 Electron 复用，业务语义只在核心维护。
+首版不实现全屏 TUI、后台守护服务或远程多用户控制。CLI 与 Electron 复用核心服务；具体控制通道在相应阶段确定。

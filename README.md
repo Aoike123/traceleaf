@@ -30,4 +30,4 @@ Traceleaf 是一个桌面优先、可恢复、可追溯的递归任务运行时�
 - SQLite 保存运行状态，本地文件保存产物。
 - CLI 先验证核心，再接桌面界面；网页控制台属于可选入口。
 - Workflow 编排继续使用 TypeScript，重计算交给 Blender、FFmpeg、ComfyUI 等工具。
-- 当前仅整理设计文档；下一步先定义单 Task 示例与最小契约。
+- 当前仅整理设计文档；下一步先收口并独立验证 ModelGateway，再进入能力装配与单 Task Loop。
