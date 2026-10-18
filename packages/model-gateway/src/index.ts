@@ -1,2 +1,20 @@
-// 网关公共入口；后续从这里导出对外提供的类型与功能。
-export {};
+export type {
+  TextMessage,
+  ToolDefinition,
+  OutputMode,
+  ToolCall,
+  ToolCallMessage,
+  ToolResultMessage,
+  ModelMessage,
+  ModelRequest,
+} from "./contracts/request.js";
+
+export type {
+  ModelOutput,
+  Usage,
+  FinishReason,
+  ModelResponse,
+  ModelResult,
+} from "./contracts/response.js";
+
+export type { GatewayErrorCode, GatewayError } from "./contracts/errors.js";
